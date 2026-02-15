@@ -1,0 +1,146 @@
+name: Caddy Builder
+version: "1.0.0"
+description: Build custom Caddy binaries with xcaddy on GitHub Actions - supports all OSes and architectures
+author: Alireza zolfaghar
+
+branding:
+  icon: package
+  color: green
+
+inputs:
+  caddy-version:
+    description: 'Caddy version to build (tag, branch, commit, or "latest")'
+    required: false
+    default: 'latest'
+  modules:
+    description: 'Caddy modules to include (comma or newline separated). Supports module@version and module=path'
+    required: false
+    default: ''
+  replaces:
+    description: 'Replace directives for xcaddy --replace (comma or newline separated)'
+    required: false
+    default: ''
+  embeds:
+    description: 'Paths for xcaddy --embed. Use format "alias:path" for aliased embeds'
+    required: false
+    default: ''
+  output-dir:
+    description: 'Output directory for the built binary'
+    required: false
+    default: '.'
+  goos:
+    description: 'Target OS (linux, windows, darwin). Empty = use runner OS'
+    required: false
+    default: ''
+  goarch:
+    description: 'Target arch (amd64, arm64, arm). Empty = use runner arch'
+    required: false
+    default: ''
+
+outputs:
+  caddy-path:
+    description: 'Full path to the built Caddy binary'
+    value: ${{ steps.build.outputs.caddy_path }}
+  caddy-name:
+    description: 'Output filename (e.g. caddy_linux_amd64, caddy_windows_amd64.exe)'
+    value: ${{ steps.platform.outputs.caddy_name }}
+  goos:
+    description: 'GOOS value for the runner'
+    value: ${{ steps.platform.outputs.goos }}
+  goarch:
+    description: 'GOARCH value for the runner'
+    value: ${{ steps.platform.outputs.goarch }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+
+    - name: Install xcaddy
+      id: xcaddy
+      run: |
+        go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.5
+        echo "xcaddy_path=$(which xcaddy)" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Determine platform
+      id: platform
+      run: |
+        # Use user input or map runner to GOOS/GOARCH
+        if [ -n "${{ inputs.goos }}" ]; then
+          GOOS="${{ inputs.goos }}"
+        else
+          case "${{ runner.os }}" in
+            Linux)   GOOS=linux ;;
+            Windows) GOOS=windows ;;
+            macOS)   GOOS=darwin ;;
+            *)       GOOS=linux ;;
+          esac
+        fi
+
+        if [ -n "${{ inputs.goarch }}" ]; then
+          GOARCH="${{ inputs.goarch }}"
+        else
+          case "${{ runner.arch }}" in
+            x64)   GOARCH=amd64 ;;
+            arm64) GOARCH=arm64 ;;
+            arm32) GOARCH=arm ;;
+            *)     GOARCH=amd64 ;;
+          esac
+        fi
+
+        # Output filename: caddy_os_arch, .exe for Windows
+        if [ "$GOOS" = "windows" ]; then
+          CADDY_NAME="caddy_${GOOS}_${GOARCH}.exe"
+        else
+          CADDY_NAME="caddy_${GOOS}_${GOARCH}"
+        fi
+
+        echo "goos=$GOOS" >> $GITHUB_OUTPUT
+        echo "goarch=$GOARCH" >> $GITHUB_OUTPUT
+        echo "caddy_name=$CADDY_NAME" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Build Caddy with xcaddy
+      id: build
+      run: |
+        OUTPUT_DIR="${{ inputs.output-dir }}"
+        CADDY_VERSION="${{ inputs.caddy-version }}"
+        CADDY_NAME="${{ steps.platform.outputs.caddy_name }}"
+        OUTPUT_PATH="${OUTPUT_DIR%/}/${CADDY_NAME}"
+
+        mkdir -p "$OUTPUT_DIR"
+
+        # Helper: parse multi-value input (comma/newline separated) into lines
+        parse_input() {
+          echo "$1" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$'
+        }
+
+        # Build --with, --replace, --embed args
+        WITH_ARGS=""
+        while IFS= read -r mod; do
+          WITH_ARGS="$WITH_ARGS --with $mod"
+        done < <(parse_input "${{ inputs.modules }}")
+
+        REPLACE_ARGS=""
+        while IFS= read -r rep; do
+          REPLACE_ARGS="$REPLACE_ARGS --replace $rep"
+        done < <(parse_input "${{ inputs.replaces }}")
+
+        EMBED_ARGS=""
+        while IFS= read -r emb; do
+          EMBED_ARGS="$EMBED_ARGS --embed $emb"
+        done < <(parse_input "${{ inputs.embeds }}")
+
+        # Execute xcaddy build (GOOS/GOARCH enable cross-compilation when set)
+        export GOOS="${{ steps.platform.outputs.goos }}"
+        export GOARCH="${{ steps.platform.outputs.goarch }}"
+        xcaddy build "$CADDY_VERSION" --output "$OUTPUT_PATH" $WITH_ARGS $REPLACE_ARGS $EMBED_ARGS
+
+        # Output path (absolute when possible for reliable artifact upload)
+        CADDY_PATH=$(cd "$OUTPUT_DIR" && pwd)/${CADDY_NAME}
+        echo "caddy_path=$CADDY_PATH" >> $GITHUB_OUTPUT
+      shell: bash

@@ -1,0 +1,222 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # Plain Caddy, no modules, native Linux
+  build-plain:
+    name: Plain (no modules)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          caddy-version: v2.8.4
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          ${{ steps.build.outputs.caddy-path }} version
+          test "${{ steps.build.outputs.goos }}" = "linux"
+          test "${{ steps.build.outputs.goarch }}" = "amd64"
+          test "${{ steps.build.outputs.caddy-name }}" = "caddy_linux_amd64"
+
+  # Modules with comma/newline and module@version
+  build-modules:
+    name: Modules (formats)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          caddy-version: v2.8.4
+          modules: |
+            github.com/caddy-dns/cloudflare
+            github.com/caddyserver/ntlm-transport@v0.1.1
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          ${{ steps.build.outputs.caddy-path }} list-modules | grep -q cloudflare
+          ${{ steps.build.outputs.caddy-path }} list-modules | grep -q ntlm-transport
+
+  # Custom output-dir
+  build-output-dir:
+    name: Custom output-dir
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          caddy-version: v2.8.4
+          output-dir: ./dist
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          test -f ./dist/caddy_linux_amd64
+
+  # Embed directory
+  build-embeds:
+    name: Embeds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p embeddir && echo "test" > embeddir/file.txt
+      - uses: ./
+        id: build
+        with:
+          caddy-version: v2.8.4
+          embeds: embeddir
+      - run: test -f "${{ steps.build.outputs.caddy-path }}"
+
+  # Caddy latest (no pinned version)
+  build-latest:
+    name: Caddy latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          caddy-version: latest
+          modules: github.com/caddy-dns/cloudflare
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          ${{ steps.build.outputs.caddy-path }} version
+
+  # Cross-compile: Linux -> Windows
+  build-cross-windows:
+    name: Cross (→ Windows)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          goos: windows
+          goarch: amd64
+          caddy-version: v2.8.4
+          modules: github.com/caddy-dns/cloudflare
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          test "${{ steps.build.outputs.caddy-name }}" = "caddy_windows_amd64.exe"
+          test "${{ steps.build.outputs.goos }}" = "windows"
+          test "${{ steps.build.outputs.goarch }}" = "amd64"
+
+  # Cross-compile: Linux -> macOS
+  build-cross-darwin:
+    name: Cross (→ macOS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          goos: darwin
+          goarch: arm64
+          caddy-version: v2.8.4
+          modules: github.com/caddy-dns/cloudflare
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          test "${{ steps.build.outputs.caddy-name }}" = "caddy_darwin_arm64"
+          test "${{ steps.build.outputs.goos }}" = "darwin"
+          test "${{ steps.build.outputs.goarch }}" = "arm64"
+
+  # Native build on Windows
+  build-native-windows:
+    name: Native Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          caddy-version: v2.8.4
+          modules: github.com/caddy-dns/cloudflare
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          "${{ steps.build.outputs.caddy-path }}" version
+          "${{ steps.build.outputs.caddy-path }}" list-modules | grep -q cloudflare
+        shell: bash
+
+  # Native build on macOS
+  build-native-macos:
+    name: Native macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          caddy-version: v2.8.4
+          modules: github.com/caddy-dns/cloudflare
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          ${{ steps.build.outputs.caddy-path }} version
+          ${{ steps.build.outputs.caddy-path }} list-modules | grep -q cloudflare
+
+  # Native Linux ARM64 (if runner available)
+  build-native-linux-arm64:
+    name: Native Linux ARM64
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: build
+        with:
+          caddy-version: v2.8.4
+          modules: github.com/caddy-dns/cloudflare
+      - run: |
+          test -f "${{ steps.build.outputs.caddy-path }}"
+          ${{ steps.build.outputs.caddy-path }} version
+          test "${{ steps.build.outputs.goarch }}" = "arm64"
+
+  # Create release after all tests pass (main branch only)
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-plain
+      - build-modules
+      - build-output-dir
+      - build-embeds
+      - build-latest
+      - build-cross-windows
+      - build-cross-darwin
+      - build-native-windows
+      - build-native-macos
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from action.yml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' action.yml | sed 's/version:[[:space:]]*["'\'']*\([^"'\'' ]*\)["'\'']*/\1/' | tr -d ' ')
+          TAG="v${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check
+        run: |
+          git fetch --tags 2>/dev/null || true
+          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release
+        if: steps.check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
