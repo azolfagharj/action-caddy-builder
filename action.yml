@@ -88,11 +88,12 @@ runs:
         if [ -n "${{ inputs.goarch }}" ]; then
           GOARCH="${{ inputs.goarch }}"
         else
-          case "${{ runner.arch }}" in
-            x64)   GOARCH=amd64 ;;
-            arm64) GOARCH=arm64 ;;
-            arm32) GOARCH=arm ;;
-            *)     GOARCH=amd64 ;;
+          ARCH_LOWER=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
+          case "$ARCH_LOWER" in
+            x64|amd64)   GOARCH=amd64 ;;
+            arm64|aarch64) GOARCH=arm64 ;;
+            arm32|arm)   GOARCH=arm ;;
+            *)           GOARCH=amd64 ;;
           esac
         fi
 

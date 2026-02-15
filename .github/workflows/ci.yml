@@ -40,7 +40,7 @@ jobs:
       - run: |
           test -f "${{ steps.build.outputs.caddy-path }}"
           ${{ steps.build.outputs.caddy-path }} list-modules | grep -q cloudflare
-          ${{ steps.build.outputs.caddy-path }} list-modules | grep -q ntlm-transport
+          ${{ steps.build.outputs.caddy-path }} list-modules | grep -q http_ntlm
 
   # Custom output-dir
   build-output-dir:
