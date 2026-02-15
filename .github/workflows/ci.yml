@@ -252,21 +252,51 @@ jobs:
             echo "should_release=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create release with auto-generated changelog
+      - name: Build release notes
         if: steps.should_release.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           NEW_TAG="${{ steps.version.outputs.new_tag }}"
           PREV_TAG="${{ steps.version.outputs.prev_tag }}"
+          REPO="${{ github.repository }}"
 
+          # Get auto-generated notes from GitHub API
           if [ -n "$PREV_TAG" ]; then
-            gh release create "$NEW_TAG" \
-              --target "${{ github.sha }}" \
-              --generate-notes \
-              --notes-start-tag "$PREV_TAG"
+            BODY=$(gh api "repos/${REPO}/releases/generate-notes" \
+              -f tag_name="$NEW_TAG" \
+              -f target_commitish="${{ github.sha }}" \
+              -f previous_tag_name="$PREV_TAG" \
+              --jq '.body')
           else
-            gh release create "$NEW_TAG" \
-              --target "${{ github.sha }}" \
-              --generate-notes
+            BODY=$(gh api "repos/${REPO}/releases/generate-notes" \
+              -f tag_name="$NEW_TAG" \
+              -f target_commitish="${{ github.sha }}" \
+              --jq '.body')
           fi
+
+          # Get commits: title as header, description as sub-items
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log "$PREV_TAG..HEAD" --no-merges --format='### %s%n%b')
+          else
+            COMMITS=$(git log --no-merges --format='### %s%n%b')
+          fi
+
+          # Combine: auto-generated + commits (no extra section title)
+          {
+            echo "$BODY"
+            echo ""
+            echo "---"
+            echo ""
+            echo "$COMMITS"
+          } > release_notes.md
+
+      - name: Create release
+        if: steps.should_release.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NEW_TAG="${{ steps.version.outputs.new_tag }}"
+          gh release create "$NEW_TAG" \
+            --target "${{ github.sha }}" \
+            --notes-file release_notes.md

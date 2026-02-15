@@ -1,4 +1,4 @@
-# Caddy Builder
+# Custom [Caddy](https://github.com/caddyserver/caddy) Builder - prebuilt GitHub Action for building custom Caddy binaries with modules, versions, and any OS/arch
 
 [![CI](https://github.com/azolfagharj/action-caddy-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/azolfagharj/action-caddy-builder/actions) [![Donate](https://img.shields.io/badge/Donate-to%20Keep%20This%20Project%20Alive-orange)](https://donate.azolfagharj.ir/)
 
@@ -20,6 +20,7 @@ Build custom Caddy binaries with [xcaddy](https://github.com/caddyserver/xcaddy)
 - [Common use cases](#common-use-cases)
 - [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
+- [Attribution](#attribution)
 - [License](#license)
 
 ---
@@ -313,6 +314,21 @@ Module IDs in `caddy list-modules` differ from Go import paths. For example, `gi
 ### Binary not found in next job
 
 Upload the binary as an artifact in the build job, then download it in the next job. See [12-build-upload-use-next-job.yml](examples/12-build-upload-use-next-job.yml).
+
+---
+
+## Attribution
+
+This action uses the following projects. We credit them here in accordance with their licenses:
+
+| Project | License | Use |
+|---------|---------|-----|
+| [Caddy](https://github.com/caddyserver/caddy) | [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) | Web server (built by this action) |
+| [xcaddy](https://github.com/caddyserver/xcaddy) | [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) | Caddy build tool |
+| [Go](https://go.dev/) | [BSD-3-Clause](https://go.dev/LICENSE) | Toolchain for xcaddy |
+| [actions/checkout](https://github.com/actions/checkout) | [MIT](https://github.com/actions/checkout/blob/main/LICENSE) | Checkout repo |
+| [actions/setup-go](https://github.com/actions/setup-go) | [MIT](https://github.com/actions/setup-go/blob/main/LICENSE) | Install Go |
+| [actions/cache](https://github.com/actions/cache) | [MIT](https://github.com/actions/cache/blob/main/LICENSE) | Cache Go modules |
 
 ---
 
