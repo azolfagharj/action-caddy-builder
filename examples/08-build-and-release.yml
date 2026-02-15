@@ -1,0 +1,52 @@
+# Build for all platforms and attach to GitHub release.
+# Copy to .github/workflows/release.yml
+# Trigger: push tags like v1.0.0
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: build
+        with:
+          caddy-version: v2.10.2
+          modules: github.com/caddy-dns/cloudflare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caddy-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ steps.build.outputs.caddy-path }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            caddy-linux-amd64/*
+            caddy-windows-amd64/*
+            caddy-darwin-arm64/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

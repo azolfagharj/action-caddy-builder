@@ -1,0 +1,17 @@
+# Use replaces and embeds (advanced xcaddy features).
+# Copy to .github/workflows/build.yml
+name: Build with replaces and embeds
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p public && echo "static" > public/index.html
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: build
+        with:
+          caddy-version: v2.10.2
+          modules: github.com/caddy-dns/cloudflare
+          embeds: static:./public
+      - run: ${{ steps.build.outputs.caddy-path }} version

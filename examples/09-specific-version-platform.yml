@@ -1,0 +1,17 @@
+# Build specific Caddy version for specific OS and architecture.
+# Copy to .github/workflows/build.yml
+name: Build specific version for platform
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: build
+        with:
+          caddy-version: v2.10.2
+          goos: linux
+          goarch: amd64
+          modules: github.com/caddy-dns/cloudflare
+      - run: ${{ steps.build.outputs.caddy-path }} version

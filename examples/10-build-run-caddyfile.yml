@@ -1,0 +1,21 @@
+# Build Caddy and run it with Caddyfile in the same job.
+# Copy to .github/workflows/build.yml
+name: Build and run Caddy
+on: [push]
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: caddy
+        with:
+          caddy-version: v2.10.2
+          modules: github.com/caddy-dns/cloudflare
+      - name: Validate Caddyfile
+        run: ${{ steps.caddy.outputs.caddy-path }} validate --config Caddyfile
+      - name: Run Caddy (background)
+        run: |
+          ${{ steps.caddy.outputs.caddy-path }} run --config Caddyfile &
+          sleep 3
+          curl -s -o /dev/null -w "%{http_code}" http://localhost:80 || true

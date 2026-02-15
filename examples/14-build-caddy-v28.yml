@@ -1,0 +1,16 @@
+# Build Caddy v2.8.x (requires go-version 1.22).
+# Copy to .github/workflows/build.yml
+name: Build Caddy v2.8.x
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: build
+        with:
+          go-version: "1.22"
+          caddy-version: v2.8.4
+          modules: github.com/caddy-dns/cloudflare
+      - run: ${{ steps.build.outputs.caddy-path }} version

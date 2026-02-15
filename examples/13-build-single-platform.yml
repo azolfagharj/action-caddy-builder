@@ -1,0 +1,18 @@
+# Build for one platform only (Linux, Windows, or macOS).
+# Copy to .github/workflows/build.yml
+name: Build Linux only
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: build
+        with:
+          caddy-version: v2.10.2
+          modules: github.com/caddy-dns/cloudflare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caddy-linux-amd64
+          path: ${{ steps.build.outputs.caddy-path }}

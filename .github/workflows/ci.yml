@@ -195,28 +195,78 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get version from action.yml
+      - name: Compute next version from tags
         id: version
         run: |
-          VERSION=$(grep '^version:' action.yml | sed 's/version:[[:space:]]*["'\'']*\([^"'\'' ]*\)["'\'']*/\1/' | tr -d ' ')
-          TAG="v${VERSION#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
-      - name: Check if tag exists
-        id: check
-        run: |
           git fetch --tags 2>/dev/null || true
-          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+
+          # Get latest tag matching vMAJOR.MINOR.PATCH (e.g. v1.2.3)
+          PREV_TAG=$(git tag -l 'v*.*.*' 2>/dev/null | sort -V | tail -1)
+
+          if [ -z "$PREV_TAG" ]; then
+            # No previous tag: start at 1.0.0
+            NEW_TAG="v1.0.0"
+            PREV_TAG_FOR_NOTES=""
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            # Parse major.minor.patch (strip leading v)
+            VER="${PREV_TAG#v}"
+            MAJOR=$(echo "$VER" | cut -d. -f1)
+            MINOR=$(echo "$VER" | cut -d. -f2)
+            PATCH=$(echo "$VER" | cut -d. -f3)
+
+            # Bump patch; if patch was 9, wrap to 0 and bump minor; if minor was 9, wrap to 0 and bump major
+            PATCH=$((PATCH + 1))
+            if [ "$PATCH" -gt 9 ]; then
+              PATCH=0
+              MINOR=$((MINOR + 1))
+              if [ "$MINOR" -gt 9 ]; then
+                MINOR=0
+                MAJOR=$((MAJOR + 1))
+              fi
+            fi
+
+            NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+            PREV_TAG_FOR_NOTES="$PREV_TAG"
           fi
 
-      - name: Create release
-        if: steps.check.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
-          generate_release_notes: true
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "prev_tag=$PREV_TAG_FOR_NOTES" >> $GITHUB_OUTPUT
+
+      - name: Skip if no new commits since last tag
+        id: should_release
+        run: |
+          PREV="${{ steps.version.outputs.prev_tag }}"
+          if [ -z "$PREV" ]; then
+            # First release, always create
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          PREV_COMMIT=$(git rev-parse "$PREV" 2>/dev/null || echo "")
+          if [ -z "$PREV_COMMIT" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          if [ "$(git rev-parse HEAD)" = "$PREV_COMMIT" ]; then
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release with auto-generated changelog
+        if: steps.should_release.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NEW_TAG="${{ steps.version.outputs.new_tag }}"
+          PREV_TAG="${{ steps.version.outputs.prev_tag }}"
+
+          if [ -n "$PREV_TAG" ]; then
+            gh release create "$NEW_TAG" \
+              --target "${{ github.sha }}" \
+              --generate-notes \
+              --previous-tag "$PREV_TAG"
+          else
+            gh release create "$NEW_TAG" \
+              --target "${{ github.sha }}" \
+              --generate-notes
+          fi

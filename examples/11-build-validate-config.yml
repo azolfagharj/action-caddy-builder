@@ -1,0 +1,18 @@
+# Build Caddy, validate config, list modules.
+# Copy to .github/workflows/build.yml
+name: Build and validate
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: caddy
+        with:
+          caddy-version: v2.10.2
+          modules: github.com/caddy-dns/cloudflare
+      - name: Validate Caddyfile
+        run: ${{ steps.caddy.outputs.caddy-path }} validate --config Caddyfile
+      - name: List modules
+        run: ${{ steps.caddy.outputs.caddy-path }} list-modules

@@ -1,0 +1,29 @@
+# Cross-compile from single Linux runner (faster, fewer jobs).
+# Copy to .github/workflows/build.yml
+name: Cross-compile
+on: [push]
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: windows
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: build
+        with:
+          goos: ${{ matrix.goos }}
+          goarch: ${{ matrix.goarch }}
+          caddy-version: v2.10.2
+          modules: github.com/caddy-dns/cloudflare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: caddy-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ steps.build.outputs.caddy-path }}

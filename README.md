@@ -1,151 +1,224 @@
 # Caddy Builder
 
-[![CI](https://github.com/azolfagharj/caddy-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/azolfagharj/caddy-builder/actions)
+[![CI](https://github.com/azolfagharj/action-caddy-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/azolfagharj/action-caddy-builder/actions) [![Donate](https://img.shields.io/badge/Donate-to%20Keep%20This%20Project%20Alive-orange)](https://donate.azolfagharj.ir/)
 
-A GitHub Action that builds custom Caddy binaries using [xcaddy](https://github.com/caddyserver/xcaddy). Supports all GitHub-hosted runner operating systems and CPU architectures. Configure extra modules, replacements, and embedded files—just like xcaddy on the command line.
+Build custom Caddy binaries with [xcaddy](https://github.com/caddyserver/xcaddy) in GitHub Actions. Supports all OS/arch, custom modules, and integrates with your pipeline.
 
-Releases are created automatically when you push to `main`. Update `version` in [action.yml](action.yml) and push—CI will create the release if the tag does not exist.
+---
 
-## Features
+## Table of contents
 
-- **Multi-platform**: Linux (x64, arm64), Windows (x64, arm64), macOS (Intel, Apple Silicon)
-- **xcaddy integration**: Uses pinned xcaddy v0.4.5 for reproducible builds
-- **Module support**: Add Caddy modules via `--with` (supports `module@version` and `module=path`)
-- **Replace directives**: Use `--replace` for dependency replacement
-- **Embed support**: Embed files and directories with `--embed` (aliased paths supported)
-- **Output naming**: Automatic filenames like `caddy_linux_amd64`, `caddy_windows_arm64.exe`
-- **Platform override**: Optional `goos`/`goarch` inputs for cross-compilation from any runner
-- **Composite action**: Simple step in your workflow, compose with `upload-artifact` as needed
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Step-by-step: Your first build](#step-by-step-your-first-build)
+- [Concepts](#concepts)
+- [Configuration reference](#configuration-reference)
+- [Outputs](#outputs)
+- [Supported platforms](#supported-platforms)
+- [Common use cases](#common-use-cases)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
-## Requirements
+---
 
-None. The action installs Go and xcaddy automatically.
+## Overview
 
-## Usage
+This action runs [xcaddy](https://github.com/caddyserver/xcaddy) inside a GitHub Actions workflow to build custom Caddy binaries. You can:
 
-### Basic (plain Caddy, no modules)
+- Add Caddy modules (DNS providers, transports, etc.)
+- Build for Linux, Windows, and macOS (x64 and arm64)
+- Use native builds (each runner builds for itself) or cross-compile (one runner builds for all)
+- Integrate the built binary into subsequent steps or jobs
+
+No Go or xcaddy setup required—the action installs everything.
+
+---
+
+## Prerequisites
+
+- A GitHub repository with Actions enabled
+- A workflow file in `.github/workflows/`
+
+---
+
+## Installation
+
+Add the action to your workflow:
 
 ```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: azolfagharj/caddy-builder@v1
-    id: caddy
-  - run: ${{ steps.caddy.outputs.caddy-path }} version
+- uses: azolfagharj/action-caddy-builder@v1
 ```
 
-### With modules
+Use a specific version for reproducibility:
 
 ```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: azolfagharj/caddy-builder@v1
-    id: caddy
-    with:
-      caddy-version: v2.8.4
-      modules: |
-        github.com/caddy-dns/cloudflare
-        github.com/caddyserver/ntlm-transport@v0.1.1
-  - run: ${{ steps.caddy.outputs.caddy-path }} list-modules
+- uses: azolfagharj/action-caddy-builder@v1.0.0
 ```
 
-### Matrix build (all platforms, upload artifacts)
+---
+
+## Quick start
+
+Create `.github/workflows/build.yml`:
+
+```yaml
+name: Build Caddy
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: caddy
+      - run: ${{ steps.caddy.outputs.caddy-path }} version
+```
+
+Push to your repo. The workflow builds Caddy and prints the version.
+
+---
+
+## Step-by-step: Your first build
+
+### Step 1: Create the workflow file
+
+Create `.github/workflows/build.yml` in your repository.
+
+### Step 2: Define when it runs
+
+```yaml
+name: Build Caddy
+on: [push]
+```
+
+Runs on every push. You can change to `on: [push, pull_request]` or `on: release` as needed.
+
+### Step 3: Add checkout and the action
 
 ```yaml
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
-          - os: ubuntu-22.04-arm
-            goos: linux
-            goarch: arm64
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-          - os: windows-11-arm
-            goos: windows
-            goarch: arm64
-          - os: macos-latest
-            goos: darwin
-            goarch: arm64
-          - os: macos-15-intel
-            goos: darwin
-            goarch: amd64
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: azolfagharj/caddy-builder@v1
-        id: build
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: caddy
+```
+
+Give the step an `id` so you can reference its outputs.
+
+### Step 4: Use the built binary
+
+The action sets `caddy-path`—the full path to the binary:
+
+```yaml
+      - run: ${{ steps.caddy.outputs.caddy-path }} version
+```
+
+### Step 5: Add modules (optional)
+
+```yaml
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: caddy
         with:
-          caddy-version: v2.8.4
+          caddy-version: v2.10.2
           modules: |
             github.com/caddy-dns/cloudflare
-      - uses: actions/upload-artifact@v4
-        with:
-          name: caddy-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ steps.build.outputs.caddy-path }}
+            github.com/caddyserver/ntlm-transport@v0.1.1
 ```
 
-### Specify target platform (cross-compile)
+---
 
-Build for a different OS/arch from any runner:
+## Concepts
 
-```yaml
-- uses: azolfagharj/caddy-builder@v1
-  id: caddy
-  with:
-    goos: windows
-    goarch: amd64
-    modules: github.com/caddy-dns/cloudflare
-# Result: caddy_windows_amd64.exe (even when run on ubuntu-latest)
-```
+### Native build vs cross-compile
 
-### With replaces and embeds
+- **Native build**: Each job runs on its target OS (e.g. `ubuntu-latest` → Linux amd64). Use a matrix of runners.
+- **Cross-compile**: One runner builds for multiple targets. Set `goos` and `goarch` explicitly.
 
-```yaml
-- uses: azolfagharj/caddy-builder@v1
-  id: caddy
-  with:
-    caddy-version: v2.8.4
-    modules: github.com/caddy-dns/cloudflare
-    replaces: golang.org/x/net=../net
-    embeds: |
-      static:./public
-      config:./config
-```
+### Output filename
 
-## Inputs
+The binary is named by platform, e.g. `caddy_linux_amd64`, `caddy_windows_amd64.exe`, `caddy_darwin_arm64`.
+
+### Using the binary in later steps
+
+Reference `steps.<id>.outputs.caddy-path` in any step in the same job. For other jobs, upload the binary as an artifact and download it there.
+
+### Modules format
+
+- Comma-separated: `github.com/caddy-dns/cloudflare, github.com/caddyserver/ntlm-transport`
+- Newline-separated (YAML multiline)
+- With version: `module@v1.2.3`
+
+---
+
+## Configuration reference
+
+### Inputs
 
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
-| `caddy-version` | string | `latest` | Caddy version: tag (e.g. `v2.8.4`), branch, commit, or `latest` |
+| `caddy-version` | string | `latest` | Caddy version: tag (`v2.10.2`), branch, commit SHA, or `latest` |
 | `modules` | string | `""` | Modules to include. Comma or newline separated. Supports `module@version` and `module=path` |
-| `replaces` | string | `""` | Replace directives for xcaddy `--replace`. Comma or newline separated |
-| `embeds` | string | `""` | Paths for xcaddy `--embed`. Use `alias:path` for aliased embeds |
-| `output-dir` | string | `"."` | Output directory for the built binary |
-| `go-version` | string | `"1.22"` | Go version. Use `1.22` for Caddy v2.8.x (avoids zap/slog compatibility issues) |
+| `replaces` | string | `""` | xcaddy `--replace` directives. Comma or newline separated |
+| `embeds` | string | `""` | xcaddy `--embed` paths. Use `alias:path` for aliased embeds |
+| `output-dir` | string | `"."` | Directory for the built binary |
+| `go-version` | string | `"1.22"` | Go version. Use `1.22` for Caddy v2.8.x |
 | `goos` | string | `""` | Target OS: `linux`, `windows`, `darwin`. Empty = runner's OS |
 | `goarch` | string | `""` | Target arch: `amd64`, `arm64`, `arm`. Empty = runner's arch |
+
+### Examples
+
+```yaml
+# Pin Caddy version
+caddy-version: v2.10.2
+
+# Add modules
+modules: |
+  github.com/caddy-dns/cloudflare
+  github.com/caddyserver/ntlm-transport@v0.1.1
+
+# Cross-compile for Windows
+goos: windows
+goarch: amd64
+
+# Caddy v2.8.x (requires go-version 1.22)
+go-version: "1.22"
+caddy-version: v2.8.4
+```
+
+---
 
 ## Outputs
 
 | Output | Description |
 |--------|-------------|
-| `caddy-path` | Full path to the built Caddy binary |
-| `caddy-name` | Output filename (e.g. `caddy_linux_amd64`, `caddy_windows_amd64.exe`) |
-| `goos` | GOOS value for the runner (`linux`, `windows`, `darwin`) |
-| `goarch` | GOARCH value for the runner (`amd64`, `arm64`, `arm`) |
+| `caddy-path` | Full path to the built binary. Use in later steps or upload-artifact |
+| `caddy-name` | Filename (e.g. `caddy_linux_amd64`, `caddy_windows_amd64.exe`) |
+| `goos` | Target OS (`linux`, `windows`, `darwin`) |
+| `goarch` | Target arch (`amd64`, `arm64`, `arm`) |
+
+### Usage
+
+```yaml
+- uses: azolfagharj/action-caddy-builder@v1
+  id: build
+- run: ${{ steps.build.outputs.caddy-path }} version
+- uses: actions/upload-artifact@v4
+  with:
+    name: caddy
+    path: ${{ steps.build.outputs.caddy-path }}
+```
+
+---
 
 ## Supported platforms
 
-Use the appropriate runner for your target OS and architecture:
-
 | OS | Architecture | Runner |
-|----|---------------|--------|
+|----|--------------|--------|
 | Linux | x64 | `ubuntu-latest`, `ubuntu-22.04`, `ubuntu-slim` |
 | Linux | arm64 | `ubuntu-24.04-arm`, `ubuntu-22.04-arm` |
 | Windows | x64 | `windows-latest`, `windows-2022` |
@@ -153,64 +226,96 @@ Use the appropriate runner for your target OS and architecture:
 | macOS | x64 (Intel) | `macos-14-large`, `macos-15-intel` |
 | macOS | arm64 (M1/M2) | `macos-latest`, `macos-14`, `macos-15` |
 
-> **Note**: Some arm64 runners (e.g. `ubuntu-22.04-arm`, `windows-11-arm`) may require GitHub Team or Enterprise for full availability. Check [GitHub-hosted runners](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners) for current availability.
+> Some arm64 runners may require GitHub Team or Enterprise. See [GitHub-hosted runners](https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners).
+
+---
+
+## Common use cases
+
+### Basic build
+
+| Use case | Example |
+|----------|---------|
+| Plain Caddy, no modules | [01-quick-start.yml](examples/01-quick-start.yml) |
+| Add modules (Cloudflare DNS, NTLM) | [02-build-with-modules.yml](examples/02-build-with-modules.yml) |
+| Modules comma-separated | [17-modules-comma-separated.yml](examples/17-modules-comma-separated.yml) |
+| Specific Caddy version + OS/arch | [09-specific-version-platform.yml](examples/09-specific-version-platform.yml) |
+| Caddy v2.8.x (go-version 1.22) | [14-build-caddy-v28.yml](examples/14-build-caddy-v28.yml) |
+| Custom output directory | [06-custom-output-dir.yml](examples/06-custom-output-dir.yml) |
+| Advanced (--replace, --embed) | [07-advanced-replaces-embeds.yml](examples/07-advanced-replaces-embeds.yml) |
+
+### Single platform
+
+| Use case | Example |
+|----------|---------|
+| Linux only | [13-build-single-platform.yml](examples/13-build-single-platform.yml) |
+| Windows only | [13b-build-windows-only.yml](examples/13b-build-windows-only.yml) |
+| macOS only | [13c-build-macos-only.yml](examples/13c-build-macos-only.yml) |
+
+### Multi-platform
+
+| Use case | Example |
+|----------|---------|
+| Matrix: Linux, Windows, macOS (native) | [04-matrix-all-platforms.yml](examples/04-matrix-all-platforms.yml) |
+| Cross-compile from single runner | [05-cross-compile.yml](examples/05-cross-compile.yml) |
+| Full matrix (arm64, Intel mac) + release | [18-build-and-release-full-matrix.yml](examples/18-build-and-release-full-matrix.yml) |
+
+### Use binary in pipeline
+
+| Use case | Example |
+|----------|---------|
+| Build and upload artifact | [03-build-and-upload.yml](examples/03-build-and-upload.yml) |
+| Build and run with Caddyfile | [10-build-run-caddyfile.yml](examples/10-build-run-caddyfile.yml) |
+| Build, validate config, list modules | [11-build-validate-config.yml](examples/11-build-validate-config.yml) |
+| Build → upload → use in next job | [12-build-upload-use-next-job.yml](examples/12-build-upload-use-next-job.yml) |
+| Build, use in multiple steps | [16-pipeline-multiple-tasks.yml](examples/16-pipeline-multiple-tasks.yml) |
+| Build and create Docker image | [15-build-and-docker.yml](examples/15-build-and-docker.yml) |
+
+### Release
+
+| Use case | Example |
+|----------|---------|
+| Build and attach to release | [08-build-and-release.yml](examples/08-build-and-release.yml) |
+| Full matrix + release | [18-build-and-release-full-matrix.yml](examples/18-build-and-release-full-matrix.yml) |
+
+---
 
 ## Examples
 
-### Build and run Caddy in the same job
+All examples are in [`examples/`](examples/). Copy any file to `.github/workflows/` in your repo.
+
+See [examples/README.md](examples/README.md) for the full list with descriptions.
+
+---
+
+## Troubleshooting
+
+### Build fails with "undefined: zapslog.HandlerOptions"
+
+Caddy v2.8.x has compatibility issues with Go 1.23. Use Go 1.22:
 
 ```yaml
-- uses: azolfagharj/caddy-builder@v1
-  id: caddy
-  with:
-    modules: github.com/caddy-dns/cloudflare
-- run: |
-    ${{ steps.caddy.outputs.caddy-path }} run --config Caddyfile
+with:
+  go-version: "1.22"
+  caddy-version: v2.8.4
 ```
 
-### Build multiple platforms from one job (cross-compile)
+Or use Caddy v2.10+ with the default Go version.
 
-Run on a single runner, build for all targets:
+### Wrong architecture on ARM runners
 
-```yaml
-jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: windows
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-    runs-on: ubuntu-latest
-    steps:
-      - uses: azolfagharj/caddy-builder@v1
-        id: build
-        with:
-          goos: ${{ matrix.goos }}
-          goarch: ${{ matrix.goarch }}
-          modules: github.com/caddy-dns/cloudflare
-      - uses: actions/upload-artifact@v4
-        with:
-          name: caddy-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: ${{ steps.build.outputs.caddy-path }}
-```
+The action detects `runner.arch`. If you see `amd64` on an ARM runner, ensure you use a supported ARM runner (e.g. `ubuntu-22.04-arm`). Some ARM runners require GitHub Team or Enterprise.
 
-### Build to a custom directory
+### Module not found in list-modules
 
-```yaml
-- uses: azolfagharj/caddy-builder@v1
-  with:
-    output-dir: ./dist
-    modules: github.com/caddy-dns/cloudflare
-```
+Module IDs in `caddy list-modules` differ from Go import paths. For example, `github.com/caddyserver/ntlm-transport` appears as `http.reverse_proxy.transport.http_ntlm`. Use `grep` with a substring that matches.
 
-### Create a release with multiple binaries
+### Binary not found in next job
 
-Combine the matrix build job above with `softprops/action-gh-release` to upload all artifacts as release assets. See [Creating a Release](https://docs.github.com/en/actions/publishing-packages/releasing-packages-to-github-actions-marketplace) for details.
+Upload the binary as an artifact in the build job, then download it in the next job. See [12-build-upload-use-next-job.yml](examples/12-build-upload-use-next-job.yml).
+
+---
 
 ## License
 
-MIT - see [LICENSE](LICENSE) for details.
+MIT - see [LICENSE](LICENSE).

@@ -1,0 +1,24 @@
+# Config for auto-generated release notes (GitHub and gh release create --generate-notes)
+# See: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+      - dependencies
+  categories:
+    - title: "## New Features"
+      labels:
+        - enhancement
+        - feature
+    - title: "## Bug Fixes"
+      labels:
+        - bug
+        - fix
+    - title: "## Documentation"
+      labels:
+        - documentation
+        - docs
+    - title: "## Other Changes"
+      labels:
+        - "*"

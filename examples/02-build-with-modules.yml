@@ -1,0 +1,17 @@
+# Build Caddy with custom modules.
+# Copy to .github/workflows/build.yml
+name: Build Caddy with modules
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: caddy
+        with:
+          caddy-version: v2.10.2
+          modules: |
+            github.com/caddy-dns/cloudflare
+            github.com/caddyserver/ntlm-transport@v0.1.1
+      - run: ${{ steps.caddy.outputs.caddy-path }} list-modules

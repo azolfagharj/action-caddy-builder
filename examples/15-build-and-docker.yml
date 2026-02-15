@@ -1,0 +1,26 @@
+# Build Caddy and create minimal Docker image.
+# Copy to .github/workflows/build.yml
+# Requires Dockerfile in repo (FROM scratch, COPY caddy /caddy, ENTRYPOINT ["/caddy"])
+name: Build and Docker
+on: [push]
+jobs:
+  build-and-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: build
+        with:
+          caddy-version: v2.10.2
+          output-dir: ./dist
+          modules: github.com/caddy-dns/cloudflare
+      - name: Build Docker image
+        run: |
+          cat > Dockerfile << 'EOF'
+          FROM scratch
+          COPY dist/caddy_linux_amd64 /caddy
+          ENTRYPOINT ["/caddy"]
+          EOF
+          docker build -t caddy-custom:latest -f Dockerfile .
+      - name: Run container
+        run: docker run --rm caddy-custom:latest version

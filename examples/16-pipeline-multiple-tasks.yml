@@ -1,0 +1,32 @@
+# Build once, use the binary in multiple subsequent steps.
+# Copy to .github/workflows/build.yml
+name: Pipeline with multiple tasks
+on: [push]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: caddy
+        with:
+          caddy-version: v2.10.2
+          modules: github.com/caddy-dns/cloudflare
+
+      - name: Task 1 - Version check
+        run: ${{ steps.caddy.outputs.caddy-path }} version
+
+      - name: Task 2 - Validate config
+        run: ${{ steps.caddy.outputs.caddy-path }} validate --config Caddyfile
+
+      - name: Task 3 - List modules
+        run: ${{ steps.caddy.outputs.caddy-path }} list-modules
+
+      - name: Task 4 - Format Caddyfile
+        run: ${{ steps.caddy.outputs.caddy-path }} fmt --overwrite Caddyfile
+
+      - name: Task 5 - Upload for next job
+        uses: actions/upload-artifact@v4
+        with:
+          name: caddy-binary
+          path: ${{ steps.caddy.outputs.caddy-path }}

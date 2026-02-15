@@ -1,0 +1,12 @@
+# Minimal: Build plain Caddy, no modules.
+# Copy to .github/workflows/build.yml
+name: Build Caddy
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azolfagharj/action-caddy-builder@v1
+        id: caddy
+      - run: ${{ steps.caddy.outputs.caddy-path }} version
